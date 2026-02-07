@@ -1,0 +1,135 @@
+% ---DEFINIZIONI STATICHE ---
+col(0..8). row(0..4).
+pos(X,Y) :- col(X), row(Y).
+player(white). player(black).
+opponent(white, black). opponent(black, white).
+
+direction(1,0). direction(1,1). direction(0,1). direction(-1,1).
+direction(-1,0). direction(-1,-1). direction(0,-1). direction(1,-1).
+
+is_even(0). is_even(2). is_even(4). is_even(6). is_even(8).
+is_odd(1). is_odd(3). is_odd(5). is_odd(7).
+strong(X,Y) :- pos(X,Y), is_even(X), is_even(Y).
+strong(X,Y) :- pos(X,Y), is_odd(X), is_odd(Y).
+weak(X,Y) :- pos(X,Y), not strong(X,Y).
+
+valid_direction(X,Y, DX,DY) :- strong(X,Y), direction(DX,DY).
+valid_direction(X,Y, DX,DY) :- weak(X,Y), direction(DX,DY), DX = 0.
+valid_direction(X,Y, DX,DY) :- weak(X,Y), direction(DX,DY), DY = 0.
+
+% ---INPUT DINAMICO---
+my_color(C) :- turn(C).
+op_color(C) :- my_color(M), opponent(M,C).
+is_mine(X,Y) :- cell(X,Y,C), my_color(C).
+is_opp(X,Y) :- cell(X,Y,C), op_color(C).
+is_empty(X,Y) :- cell(X,Y,empty).
+
+% ---EURISTICA CENTRALITÀ---
+% Utililizziamo l'euristica per dire all'AI che le posizioni migliori sono quelle centrali 
+% e non quelle sui bordi -> Nodi Forti
+ 
+
+centrality_val(4,2, 10).
+centrality_val(3,2, 9). centrality_val(5,2, 9). centrality_val(4,1, 9). centrality_val(4,3, 9).
+centrality_val(2,2, 8). centrality_val(6,2, 8). centrality_val(4,0, 8). centrality_val(4,4, 8).
+centrality_val(3,1, 8). centrality_val(5,1, 8). centrality_val(3,3, 8). centrality_val(5,3, 8).
+centrality_val(1,2, 7). centrality_val(7,2, 7). centrality_val(3,0, 7). centrality_val(3,4, 7).
+centrality_val(5,0, 7). centrality_val(5,4, 7). centrality_val(2,1, 7). centrality_val(2,3, 7).
+centrality_val(6,1, 7). centrality_val(6,3, 7).
+centrality_val(0,2, 6). centrality_val(8,2, 6). centrality_val(2,0, 6). centrality_val(2,4, 6).
+centrality_val(6,0, 6). centrality_val(6,4, 6). centrality_val(1,1, 6). centrality_val(1,3, 6).
+centrality_val(7,1, 6). centrality_val(7,3, 6).
+centrality_val(1,0, 5). centrality_val(1,4, 5). centrality_val(7,0, 5). centrality_val(7,4, 5).
+centrality_val(0,1, 5). centrality_val(0,3, 5). centrality_val(8,1, 5). centrality_val(8,3, 5).
+centrality_val(0,0, 4). centrality_val(8,0, 4). centrality_val(0,4, 4). centrality_val(8,4, 4).
+
+% ==============================================================================
+% GENERAZIONE MOSSE (Logica di base)
+% ==============================================================================
+
+potential_move_base(FX,FY, TX,TY, DX,DY) :-
+    is_mine(FX,FY), valid_direction(FX,FY, DX,DY),
+    TX = FX + DX, TY = FY + DY, is_empty(TX,TY).
+
+% Calcolo Catture (Ricorsivo)
+can_approach(FX,FY, TX,TY, DX,DY) :-
+    potential_move_base(FX,FY, TX,TY, DX,DY),
+    NX = TX + DX, NY = TY + DY, is_opp(NX,NY).
+
+can_withdrawal(FX,FY, TX,TY, DX,DY) :-
+    potential_move_base(FX,FY, TX,TY, DX,DY),
+    NX = FX - DX, NY = FY - DY, is_opp(NX,NY).
+
+% Conteggio Approach
+seq_app(FX,FY, TX,TY, DX,DY, 1, NX,NY) :-
+    can_approach(FX,FY, TX,TY, DX,DY), NX = TX + DX, NY = TY + DY.
+seq_app(FX,FY, TX,TY, DX,DY, K1, NNX,NNY) :-
+    seq_app(FX,FY, TX,TY, DX,DY, K, NX,NY),
+    K1 = K + 1,
+    NNX = NX + DX, NNY = NY + DY, is_opp(NNX,NNY).
+max_app(FX,FY, TX,TY, N) :-
+    seq_app(FX,FY, TX,TY, _, _, N, _, _),
+    not exists_higher_app(FX,FY, TX,TY, N).
+exists_higher_app(FX,FY, TX,TY, N) :-
+    seq_app(FX,FY, TX,TY, _, _, N, _, _),
+    seq_app(FX,FY, TX,TY, _, _, N2, _, _),
+    N2 > N.
+
+% Conteggio Withdrawal
+seq_wit(FX,FY, TX,TY, DX,DY, 1, NX,NY) :-
+    can_withdrawal(FX,FY, TX,TY, DX,DY), NX = FX - DX, NY = FY - DY.
+seq_wit(FX,FY, TX,TY, DX,DY, K1, NNX,NNY) :-
+    seq_wit(FX,FY, TX,TY, DX,DY, K, NX,NY),
+    K1 = K + 1,
+    NNX = NX - DX, NNY = NY - DY, is_opp(NNX,NNY).
+max_wit(FX,FY, TX,TY, N) :-
+    seq_wit(FX,FY, TX,TY, _, _, N, _, _),
+    not exists_higher_wit(FX,FY, TX,TY, N).
+exists_higher_wit(FX,FY, TX,TY, N) :-
+    seq_wit(FX,FY, TX,TY, _, _, N, _, _),
+    seq_wit(FX,FY, TX,TY, _, _, N2, _, _),
+    N2 > N.
+
+% Raggruppamento Mosse Valide con punteggio cattura
+valid_move(FX,FY, TX,TY, approach, N) :- max_app(FX,FY, TX,TY, N).
+valid_move(FX,FY, TX,TY, withdrawal, N) :- max_wit(FX,FY, TX,TY, N).
+valid_move(FX,FY, TX,TY, paika, 0) :-
+    potential_move_base(FX,FY, TX,TY, _,_),
+    not any_capture_on_board.
+
+% Flag: esiste almeno una cattura possibile sulla scacchiera?
+any_capture_on_board :- valid_move(_,_,_,_,approach, _).
+any_capture_on_board :- valid_move(_,_,_,_,withdrawal, _).
+
+% ==============================================================================
+% GUESS  & CHECK (Genera una singola mossa)
+% ==============================================================================
+
+%do_move(FX,FY, TX,TY, Type) | skip_move(FX,FY, TX,TY, Type) :- valid_move(FX,FY, TX,TY, Type, _).
+% Vincolo: deve esserci esattamente una mossa scelta.
+%:- #count { FX,FY,TX,TY,Type : do_move(FX,FY, TX,TY, Type) } != 1.
+
+1<={do_move(FX,FY, TX,TY, Type) : valid_move(FX,FY, TX,TY, Type, _)}<=1.
+
+
+% ==============================================================================
+% OPTIMIZE
+% ==============================================================================
+
+% PRIORITÀ 4 (Massima): Massimizzare il numero di pedine catturate.
+% Penalità = 10 - Count.
+:~ do_move(FX,FY, TX,TY, Type), valid_move(FX,FY, TX,TY, Type, Count), P = 10 - Count. [P@4, FX,FY,TX,TY,Type]
+
+% PRIORITÀ 3: Massimizzare la Centralità della destinazione.
+:~ do_move(FX,FY, TX,TY, Type), centrality_val(TX,TY, Val), P = 10 - Val. [P@3, FX,FY,TX,TY,Type]
+
+% PRIORITÀ 2: Preferire Nodi Forti.
+:~ do_move(FX,FY, TX,TY, Type), weak(TX,TY). [1@2, FX,FY,TX,TY,Type]
+
+% PRIORITÀ 1 (Tie-Break): Determinismo sulle coordinate.
+:~ do_move(FX,FY, TX,TY, Type). [FX@1, FX,FY,TX,TY,Type]
+:~ do_move(FX,FY, TX,TY, Type). [FY@1, FX,FY,TX,TY,Type]
+:~ do_move(FX,FY, TX,TY, Type). [TX@1, FX,FY,TX,TY,Type]
+:~ do_move(FX,FY, TX,TY, Type). [TY@1, FX,FY,TX,TY,Type]
+
+#show do_move/5.

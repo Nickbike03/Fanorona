@@ -5,6 +5,7 @@ from tkinter import colorchooser
 import copy
 import random
 import time
+from asp_agent import ASPAgent
 
 
 pieces = []
@@ -37,6 +38,9 @@ menu_aiselect4 = False
 menu_aiselect5 = False
 p1color = (None, "white")
 p2color = (None, "black")
+asp_agent = ASPAgent()
+asp_mode = False
+ai_thinking = False
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -67,6 +71,12 @@ def render():
         ai_menu.entryconfigure(0, label="Turn AI Off")
     else:
         ai_menu.entryconfigure(0, label="Turn AI On")
+
+    if asp_mode:
+        ai_menu.entryconfigure(3, label="✓ Toggle ASP AI")
+    else:
+        ai_menu.entryconfigure(3, label="Toggle ASP AI")
+
 
     width = correct_width = c.winfo_width()
     height = correct_height = c.winfo_height()
@@ -647,124 +657,175 @@ def valuation(valpieces):
 
 def ai():
     global pieces, ai_moves, ai_pieces, ai_moveslist, tree
-    if not menu_pos == 2:
-        return
-    if is_moving:
-        return
-    if ask_player:
-        return
-    ai_moves.clear()
-    ai_pieces = [copy.deepcopy(pieces)]
-    ai_moveslist = []
-    ai_movable = []
-    tree = []
+    global turn, notturn, width, height, dw, dh, x, y, gamelist, history_pointer, ai_game, asp_mode, asp_agent, menu_pos, is_moving, ask_player, listbox, ai_thinking
+    
+    ai_thinking = True
+    try:
+        if not menu_pos == 2:
+            return
+        if is_moving:
+            return
+        if ask_player:
+            return
+        ai_moves.clear()
 
-    temp = 0
-    for lvl in range(depth):
-        temp2 = temp
-        temp = len(ai_pieces)
-        for j in range(temp2, temp):
-            ai_movable.clear()
-            find_all_movables(ai_pieces[j], ai_movable, lvl)
+        if asp_mode:
+            # ASP AI LOGIC
+            move = asp_agent.get_best_move(pieces, turn)
+            if move:
+                fx, fy, tx, ty, mtype = move
+                print(f"[ASP AI] Executing move: {fx},{fy} -> {tx},{ty} ({mtype})")
+       
+                # Apply move to pieces
+                pieces[fy][fx] = 0
+                pieces[ty][tx] = turn
+                
+                # Populate ai_moves for visual arrows
+                ai_moves.append((fx, fy))
+                ai_moves.append((tx, ty))
+                
+                # Handle captures
+                if mtype in ["approach", "withdrawal"]:
+                    # specific awdict for this move
+                    temp_aw = {(tx, ty): mtype}
+                    remove_pieces(fx, fy, tx, ty, pieces, temp_aw, notturn)
+                
+                # Finalize turn
+                switch_turn()
 
-            if not paika:
-                for i in ai_movable:
-                    create_to_movables(i[0], i[1], ai_pieces[j], [i], j, lvl)
+                # Update history and listbox
+                gamelist.append([])
+                gamelist[-1].append(copy.deepcopy(pieces))
+                gamelist[-1].append(turn)
+                gamelist[-1].append(notturn)
+                
+                color_name = "White" if turn == 1 else "Black"
+                listbox.insert(END, "Move #" + str(len(gamelist)) + " (" + color_name + "-ASP)")
+                
+                mark_all_movables()
+                render()
+                win_check()
+                return
             else:
-                for i in ai_movable:
-                    create_to_paika(i[0], i[1], ai_pieces[j], j, lvl)
-        if len(ai_pieces) < 3:
-            break
+                 print("[ASP AI] No move returned. Game Over?")
+                 return
 
-    '''
-    # printing ai_pieces:
-    n = 0
-    for i in range(len(ai_pieces)):
-        for j in range(len(ai_pieces[i])):
-            if j % 5 == 0:
-                print(n)
-                n += 1
-                print(ai_pieces[i][j])
-            else:
-                print(ai_pieces[i][j])
-    '''
 
-    score = copy.deepcopy(tree[-1])
+        # --- Original MinMax AI logic starts here ---
+        ai_pieces = [copy.deepcopy(pieces)]
 
-    rndm = []
-    for i in range(len(tree)):
-        k = tree[-i - 1]
-        if score[1] == k[1]:
-            if k[2] % 2 == 0:
-                if turn == 1:
-                    if k[3] > score[3]:
-                        score = copy.deepcopy(k)
-                        if k[2] == 0 and len(rndm) > 0:
-                            rndm.clear()
-                    elif k[2] == 0 and k[3] == score[3]:
-                        if len(rndm) == 0:
-                            rndm.append(copy.deepcopy(score))
-                        rndm.append(copy.deepcopy(k))
+        ai_moveslist = []
+        ai_movable = []
+        tree = []
 
+        temp = 0
+        for lvl in range(depth):
+            temp2 = temp
+            temp = len(ai_pieces)
+            for j in range(temp2, temp):
+                ai_movable.clear()
+                find_all_movables(ai_pieces[j], ai_movable, lvl)
+
+                if not paika:
+                    for i in ai_movable:
+                        create_to_movables(i[0], i[1], ai_pieces[j], [i], j, lvl)
                 else:
-                    if k[3] < score[3]:
-                        score = copy.deepcopy(k)
-                        if k[2] == 0 and len(rndm) > 0:
-                            rndm.clear()
-                    elif k[2] == 0 and k[3] == score[3]:
-                        if len(rndm) == 0:
-                            rndm.append(copy.deepcopy(score))
-                        rndm.append(copy.deepcopy(k))
-            else:
-                if notturn == 1:
-                    if k[3] > score[3]:
-                        score = copy.deepcopy(k)
-                        if k[2] == 0 and len(rndm) > 0:
-                            rndm.clear()
-                    elif k[2] == 0 and k[3] == score[3]:
-                        if len(rndm) == 0:
-                            rndm.append(copy.deepcopy(score))
-                        rndm.append(copy.deepcopy(k))
+                    for i in ai_movable:
+                        create_to_paika(i[0], i[1], ai_pieces[j], j, lvl)
+            if len(ai_pieces) < 3:
+                break
 
+        '''
+        # printing ai_pieces:
+        n = 0
+        for i in range(len(ai_pieces)):
+            for j in range(len(ai_pieces[i])):
+                if j % 5 == 0:
+                    print(n)
+                    n += 1
+                    print(ai_pieces[i][j])
                 else:
-                    if k[3] < score[3]:
-                        score = copy.deepcopy(k)
-                        if k[2] == 0 and len(rndm) > 0:
-                            rndm.clear()
-                    elif k[2] == 0 and k[3] == score[3]:
-                        if len(rndm) == 0:
-                            rndm.append(copy.deepcopy(score))
-                        rndm.append(copy.deepcopy(k))
+                    print(ai_pieces[i][j])
+        '''
+
+        score = copy.deepcopy(tree[-1])
+
+        rndm = []
+        for i in range(len(tree)):
+            k = tree[-i - 1]
+            if score[1] == k[1]:
+                if k[2] % 2 == 0:
+                    if turn == 1:
+                        if k[3] > score[3]:
+                            score = copy.deepcopy(k)
+                            if k[2] == 0 and len(rndm) > 0:
+                                rndm.clear()
+                        elif k[2] == 0 and k[3] == score[3]:
+                            if len(rndm) == 0:
+                                rndm.append(copy.deepcopy(score))
+                            rndm.append(copy.deepcopy(k))
+
+                    else:
+                        if k[3] < score[3]:
+                            score = copy.deepcopy(k)
+                            if k[2] == 0 and len(rndm) > 0:
+                                rndm.clear()
+                        elif k[2] == 0 and k[3] == score[3]:
+                            if len(rndm) == 0:
+                                rndm.append(copy.deepcopy(score))
+                            rndm.append(copy.deepcopy(k))
+                else:
+                    if notturn == 1:
+                        if k[3] > score[3]:
+                            score = copy.deepcopy(k)
+                            if k[2] == 0 and len(rndm) > 0:
+                                rndm.clear()
+                        elif k[2] == 0 and k[3] == score[3]:
+                            if len(rndm) == 0:
+                                rndm.append(copy.deepcopy(score))
+                            rndm.append(copy.deepcopy(k))
+
+                    else:
+                        if k[3] < score[3]:
+                            score = copy.deepcopy(k)
+                            if k[2] == 0 and len(rndm) > 0:
+                                rndm.clear()
+                        elif k[2] == 0 and k[3] == score[3]:
+                            if len(rndm) == 0:
+                                rndm.append(copy.deepcopy(score))
+                            rndm.append(copy.deepcopy(k))
+            else:
+                tree[score[1] - 1][3] = score[3]
+                score = copy.deepcopy(k)
+
+        if len(rndm) > 0:
+            temprndm = random.randrange(len(rndm))
+            score = copy.deepcopy(rndm[temprndm])
+
+        for i in range(5):
+            for j in range(9):
+                pieces[i][j] = ai_pieces[score[0]][i][j]
+
+        for i in ai_moveslist[score[0] - 1]:
+            ai_moves.append(i)
+
+        switch_turn()
+
+        gamelist.append([])
+        gamelist[-1].append(copy.deepcopy(pieces))
+        gamelist[-1].append(turn)
+        gamelist[-1].append(notturn)
+
+        if turn == 1:
+            listbox.insert(END, "Move #" + str(len(gamelist)) + " (White)")
         else:
-            tree[score[1] - 1][3] = score[3]
-            score = copy.deepcopy(k)
+            listbox.insert(END, "Move #" + str(len(gamelist)) + " (Black)")
 
-    if len(rndm) > 0:
-        temprndm = random.randrange(len(rndm))
-        score = copy.deepcopy(rndm[temprndm])
-
-    for i in range(5):
-        for j in range(9):
-            pieces[i][j] = ai_pieces[score[0]][i][j]
-
-    for i in ai_moveslist[score[0] - 1]:
-        ai_moves.append(i)
-
-    switch_turn()
-
-    gamelist.append([])
-    gamelist[-1].append(copy.deepcopy(pieces))
-    gamelist[-1].append(turn)
-    gamelist[-1].append(notturn)
-
-    if turn == 1:
-        listbox.insert(END, "Move #" + str(len(gamelist)) + " (White)")
-    else:
-        listbox.insert(END, "Move #" + str(len(gamelist)) + " (Black)")
-
-    mark_all_movables()
-    render()
-    win_check()
+        mark_all_movables()
+        render()
+        win_check()
+    finally:
+        ai_thinking = False
 
 
 # ----------------------------------------------------------------------------------------------------------------------
@@ -1018,8 +1079,21 @@ def resize(event):
     render()
 
 
+def toggle_asp_ai():
+    global asp_mode, ai_game
+    asp_mode = not asp_mode
+    if asp_mode:
+        ai_game = True # Enable AI if enabling ASP
+        print("[ASP AI] Enabled")
+    else:
+        print("[ASP AI] Disabled")
+    render()
+
+
 def click(event):
-    global is_moving, moving_x, moving_y, direction, aw, positions, ask_x, ask_y, ask_player, asking, menu_pos
+    global is_moving, moving_x, moving_y, direction, aw, positions, ask_x, ask_y, ask_player, asking, menu_pos, ai_thinking
+    if ai_thinking:
+        return
     if menu_pos == 2:
         if (event.x < (width - correct_width) / 2
                 or event.x > ((width - correct_width) / 2) + correct_width
@@ -1092,6 +1166,7 @@ def click(event):
                     c.update()
                     if not win_check():
                         if ai_game:
+                            ai_thinking = True
                             time.sleep(.5)
                             ai()
                     return
@@ -1133,6 +1208,7 @@ def click(event):
                 c.update()
                 if not win_check():
                     if ai_game:
+                        ai_thinking = True
                         time.sleep(.5)
                         ai()
                 return
@@ -1273,6 +1349,7 @@ depth_menu.add_command(label="Hard (3)", command=set_depth_three)
 depth_menu.add_command(label="Custom", command=custom_depth)
 
 ai_menu.add_cascade(menu=depth_menu, label="Difficulty")
+ai_menu.add_command(label="Toggle ASP AI", command=lambda: toggle_asp_ai())
 menubar.add_cascade(menu=ai_menu, label="AI Settings")
 
 view_menu = Menu(menubar, tearoff=0)
@@ -1322,7 +1399,7 @@ reset.pack(fill=X)
 '''
 
 # Columns 2: Canvas
-c = Canvas(root, width=900, height=500)
+c = Canvas(root, width=400, height=200)
 c.grid(row=0, column=1, rowspan=3, sticky=N+S+W+E)
 
 # binds

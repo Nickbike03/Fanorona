@@ -216,3 +216,10 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+
+# Google OAuth
+credentials.json
+token.json
+
+# Temporary files
+.tmp/
