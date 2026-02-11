@@ -28,7 +28,6 @@ is_empty(X,Y) :- cell(X,Y,empty).
 % Utililizziamo l'euristica per dire all'AI che le posizioni migliori sono quelle centrali 
 % e non quelle sui bordi -> Nodi Forti
  
-
 centrality_val(4,2, 10).
 centrality_val(3,2, 9). centrality_val(5,2, 9). centrality_val(4,1, 9). centrality_val(4,3, 9).
 centrality_val(2,2, 8). centrality_val(6,2, 8). centrality_val(4,0, 8). centrality_val(4,4, 8).
@@ -105,15 +104,10 @@ any_capture_on_board :- valid_move(_,_,_,_,withdrawal, _).
 % GUESS  & CHECK (Genera una singola mossa)
 % ==============================================================================
 
-%do_move(FX,FY, TX,TY, Type) | skip_move(FX,FY, TX,TY, Type) :- valid_move(FX,FY, TX,TY, Type, _).
-% Vincolo: deve esserci esattamente una mossa scelta.
-%:- #count { FX,FY,TX,TY,Type : do_move(FX,FY, TX,TY, Type) } != 1.
-
 1<={do_move(FX,FY, TX,TY, Type) : valid_move(FX,FY, TX,TY, Type, _)}<=1.
 
-
 % ==============================================================================
-% OPTIMIZE
+% OTTIMIZZAZIONE
 % ==============================================================================
 
 % PRIORITÀ 4 (Massima): Massimizzare il numero di pedine catturate.

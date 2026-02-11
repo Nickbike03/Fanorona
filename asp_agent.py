@@ -3,7 +3,7 @@ import os
 import re
 
 class ASPAgent:
-    def __init__(self, dlv_path="dlv.exe", rules_path="fanorona.dl", work_dir=".tmp"):
+    def __init__(self, dlv_path="dlv.exe", rules_path="fanorona.txt", work_dir=".tmp"):
         # Use absolute path for dlv.exe if it's just a filename
         if not os.path.isabs(dlv_path):
             self.dlv_path = os.path.abspath(dlv_path)
@@ -27,7 +27,7 @@ class ASPAgent:
         print("\n[ASP AI] Inizio ciclo decisionale.")
         
         # 1. Convert Board tO ASP Facts
-        facts_file = os.path.join(self.work_dir, "facts.dl")
+        facts_file = os.path.join(self.work_dir, "facts.txt")
         self._write_facts(pieces, turn_color_code, facts_file)
         print(f"[ASP AI] Fatti generati in: {facts_file}")
 
